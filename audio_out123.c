@@ -110,8 +110,8 @@ static void deinit(void) {
 }
 
 static void start(int sample_rate) {
-    if (sample_rate != 44100)
-        die("unexpected sample rate!");
+//    if (sample_rate != 44100)
+//        die("unexpected sample rate!");
     out123_start(dev, sample_rate, 2, MPG123_ENC_SIGNED_16);
 }
 

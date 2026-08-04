@@ -82,6 +82,7 @@ static void *rtp_tcp_receiver(void *arg) {
         int len = rtp_tcp_read_chunk(new_sock);
         if (len == 0)
             break;
+        config.encoding = packet[2];
         player_put_tcp_packet(packet + 12, len - 12);
     }
 

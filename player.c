@@ -43,12 +43,17 @@
 #include "common.h"
 #include "player.h"
 #include "rtp.h"
+#include "config.h"
 
 #ifdef FANCY_RESAMPLING
 #include <samplerate.h>
 #endif
 
 #include "alac.h"
+
+#ifdef CONFIG_AAC
+#include "fdk-aac/aacdecoder_lib.h"
+#endif
 
 // parameters from the source
 static unsigned char *aesiv;
@@ -65,6 +70,10 @@ static pthread_t player_thread;
 static int please_stop;
 
 static alac_file *decoder_info;
+#ifdef CONFIG_AAC
+HANDLE_AACDECODER aacdecoder;
+CStreamInfo *aacinfo = NULL;
+#endif
 
 #ifdef FANCY_RESAMPLING
 static int fancy_resampling = 1;
@@ -158,11 +167,18 @@ static int init_decoder(int32_t fmtp[12]) {
     alac->setinfo_86 =      fmtp[10];
     alac->setinfo_8a_rate = fmtp[11];
     alac_allocate_buffers(alac);
+
+#ifdef CONFIG_AAC
+    aacdecoder = aacDecoder_Open(TT_MP4_ADTS, 1);
+#endif
     return 0;
 }
 
 static void free_decoder(void) {
     alac_free(decoder_info);
+#ifdef CONFIG_AAC
+    aacDecoder_Close(aacdecoder);
+#endif
 }
 
 #ifdef FANCY_RESAMPLING
@@ -195,6 +211,42 @@ static void free_buffer(void) {
 }
 
 void player_put_tcp_packet(uint8_t *data, int len) {
+#ifdef CONFIG_AAC
+    if(config.encoding == 2) {
+    static UCHAR inbuf[1024*8];
+    static INT_PCM outbuf[1024*8];
+    UINT inLen = len;
+    UINT bytesValid;
+    UCHAR *pInbuf = inbuf;
+    static UCHAR head[] = {0xff, 0xf1, 0x4c, 0x80, 0x01, 0xbf, 0xfc};
+
+    head[4]  = (unsigned char)(((len+7)>>3)&0xff);
+    head[5]  = 0x1f | (unsigned char)(((len+7)<<5)&0xe0);
+
+    memcpy(inbuf, head, 7);
+    memcpy(inbuf + 7, data, len);
+    inLen = len + 7;
+    bytesValid = len + 7;
+    if(aacDecoder_Fill(aacdecoder, &pInbuf, &inLen,
+        &bytesValid) != AAC_DEC_OK){
+            fprintf(stderr, "aacDecoder_Fill error");
+            return;
+    }
+    AAC_DECODER_ERROR err;
+    err = aacDecoder_DecodeFrame(aacdecoder, outbuf,
+        sizeof(outbuf) / sizeof(*outbuf), 0);
+    if(err == AAC_DEC_NOT_ENOUGH_BITS) {
+    }
+    if(err == AAC_DEC_OK) {
+        aacinfo = aacDecoder_GetStreamInfo(aacdecoder);
+        if (aacinfo && aacinfo->frameSize > 0) {
+            config.output->play(outbuf, aacinfo->frameSize);
+        }
+    } else {
+           fprintf(stderr, "aacDecoder_DecodeFrame error");
+    }
+    } else {
+#endif
     int outsize;
     abuf_t *abuf = 0;
 
@@ -204,6 +256,9 @@ void player_put_tcp_packet(uint8_t *data, int len) {
         alac_decode_frame(decoder_info, data, abuf->data, &outsize);
         config.output->play(abuf->data, outsize/4);
     }
+#ifdef CONFIG_AAC
+    }
+#endif
 }
 
 void player_put_packet(seq_t seqno, uint8_t *data, int len) {
