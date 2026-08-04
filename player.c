@@ -211,20 +211,21 @@ static void free_buffer(void) {
 }
 
 void player_put_tcp_packet(uint8_t *data, int len) {
+    abuf_t *abuf = 0;
+
+    abuf = audio_buffer;
 #ifdef CONFIG_AAC
     if(config.encoding == 2) {
-    static UCHAR inbuf[1024*8];
-    static INT_PCM outbuf[1024*8];
     UINT inLen = len;
     UINT bytesValid;
-    UCHAR *pInbuf = inbuf;
+    // data buffer have 12 bytes space in head
+    UCHAR *pInbuf = data - 7;
     static UCHAR head[] = {0xff, 0xf1, 0x4c, 0x80, 0x01, 0xbf, 0xfc};
 
     head[4]  = (unsigned char)(((len+7)>>3)&0xff);
     head[5]  = 0x1f | (unsigned char)(((len+7)<<5)&0xe0);
 
-    memcpy(inbuf, head, 7);
-    memcpy(inbuf + 7, data, len);
+    memcpy(pInbuf , head, 7);
     inLen = len + 7;
     bytesValid = len + 7;
     if(aacDecoder_Fill(aacdecoder, &pInbuf, &inLen,
@@ -233,24 +234,18 @@ void player_put_tcp_packet(uint8_t *data, int len) {
             return;
     }
     AAC_DECODER_ERROR err;
-    err = aacDecoder_DecodeFrame(aacdecoder, outbuf,
-        sizeof(outbuf) / sizeof(*outbuf), 0);
-    if(err == AAC_DEC_NOT_ENOUGH_BITS) {
-    }
+    err = aacDecoder_DecodeFrame(aacdecoder, abuf->data,
+        OUTFRAME_BYTES(frame_size), 0);
     if(err == AAC_DEC_OK) {
-        aacinfo = aacDecoder_GetStreamInfo(aacdecoder);
-        if (aacinfo && aacinfo->frameSize > 0) {
-            config.output->play(outbuf, aacinfo->frameSize);
-        }
+        if (aacinfo == NULL)
+            aacinfo = aacDecoder_GetStreamInfo(aacdecoder);
+        config.output->play(abuf->data, aacinfo->frameSize);
     } else {
            fprintf(stderr, "aacDecoder_DecodeFrame error");
     }
     } else {
 #endif
     int outsize;
-    abuf_t *abuf = 0;
-
-    abuf = audio_buffer;
 
     if (abuf) {
         alac_decode_frame(decoder_info, data, abuf->data, &outsize);
