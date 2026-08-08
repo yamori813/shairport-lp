@@ -286,7 +286,7 @@ void log_setup() {
 }
 
 int main(int argc, char **argv) {
-    printf("Starting Shairport %s\n", version);
+    printf("Starting %s\n", version);
 
     signal_setup();
     memset(&config, 0, sizeof(config));
