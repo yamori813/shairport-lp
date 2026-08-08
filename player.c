@@ -213,9 +213,9 @@ static void free_buffer(void) {
 void player_put_tcp_packet(uint8_t *data, int len) {
     abuf_t *abuf = 0;
 
-    abuf = audio_buffer;
 #ifdef CONFIG_AAC
     if(config.encoding == 1) {
+    static int bufno = 0;
     UINT inLen = len;
     UINT bytesValid;
     // data buffer have 12 bytes space in head
@@ -233,13 +233,22 @@ void player_put_tcp_packet(uint8_t *data, int len) {
             fprintf(stderr, "aacDecoder_Fill error");
             return;
     }
+    abuf = audio_buffer + bufno;
     AAC_DECODER_ERROR err;
     err = aacDecoder_DecodeFrame(aacdecoder, abuf->data,
         OUTFRAME_BYTES(frame_size), 0);
     if(err == AAC_DEC_OK) {
+        ++bufno;
         if (aacinfo == NULL)
             aacinfo = aacDecoder_GetStreamInfo(aacdecoder);
-        config.output->play(abuf->data, aacinfo->frameSize);
+        if (bufno == 4) {
+            int i;
+            for (i = 0; i < bufno; ++i) {
+                abuf = audio_buffer + i;
+                config.output->play(abuf->data, aacinfo->frameSize);
+            }
+            bufno = 0;
+        }
     } else {
            fprintf(stderr, "aacDecoder_DecodeFrame error");
     }
@@ -247,6 +256,7 @@ void player_put_tcp_packet(uint8_t *data, int len) {
 #endif
     int outsize;
 
+    abuf = audio_buffer;
     if (abuf) {
         alac_decode_frame(decoder_info, data, abuf->data, &outsize);
         config.output->play(abuf->data, outsize/4);
