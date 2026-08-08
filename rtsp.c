@@ -575,6 +575,7 @@ static void handle_announce(rtsp_conn_info *conn,
     char *paesiv = NULL;
     char *prsaaeskey = NULL;
 #endif
+    char *rtpmap = NULL;
     char *pfmtp = NULL;
     char *cp = req->content;
     int cp_left = req->contentlength;
@@ -582,6 +583,9 @@ static void handle_announce(rtsp_conn_info *conn,
     while (cp_left && cp) {
         next = nextline(cp, cp_left);
         cp_left -= next-cp;
+
+        if (!strncmp(cp, "a=rtpmap:", 9))
+            rtpmap = cp+9;
 
         if (!strncmp(cp, "a=fmtp:", 7))
             pfmtp = cp+7;
@@ -602,6 +606,10 @@ static void handle_announce(rtsp_conn_info *conn,
         return;
     }
 
+    if (!strncmp(rtpmap, "96 mpeg4-generic", 16))
+        config.encoding = 1;
+    else
+        config.encoding = 0;
     int i;
     for (i=0; i<sizeof(conn->stream.fmtp)/sizeof(conn->stream.fmtp[0]); i++)
         conn->stream.fmtp[i] = atoi(strsep(&pfmtp, " \t"));

@@ -215,7 +215,7 @@ void player_put_tcp_packet(uint8_t *data, int len) {
 
     abuf = audio_buffer;
 #ifdef CONFIG_AAC
-    if(config.encoding == 2) {
+    if(config.encoding == 1) {
     UINT inLen = len;
     UINT bytesValid;
     // data buffer have 12 bytes space in head
