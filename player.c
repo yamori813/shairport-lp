@@ -233,20 +233,16 @@ void player_put_tcp_packet(uint8_t *data, int len) {
             fprintf(stderr, "aacDecoder_Fill error");
             return;
     }
-    abuf = audio_buffer + bufno;
+    abuf = audio_buffer;
     AAC_DECODER_ERROR err;
-    err = aacDecoder_DecodeFrame(aacdecoder, abuf->data,
+    err = aacDecoder_DecodeFrame(aacdecoder, abuf->data + bufno * 1024 * 2,
         OUTFRAME_BYTES(frame_size), 0);
     if(err == AAC_DEC_OK) {
         ++bufno;
         if (aacinfo == NULL)
             aacinfo = aacDecoder_GetStreamInfo(aacdecoder);
         if (bufno == 4) {
-            int i;
-            for (i = 0; i < bufno; ++i) {
-                abuf = audio_buffer + i;
-                config.output->play(abuf->data, aacinfo->frameSize);
-            }
+            config.output->play(abuf->data, aacinfo->frameSize*4);
             bufno = 0;
         }
     } else {
